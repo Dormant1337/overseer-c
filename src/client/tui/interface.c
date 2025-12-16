@@ -1,335 +1,284 @@
 #define _XOPEN_SOURCE_EXTENDED
 #include <ncurses.h>
 #include <string.h>
-#include <unistd.h>
-#include <time.h>
 #include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
 #include <sys/time.h>
 #include "interface.h"
 #include "../globals.h"
 #include "../system/network.h"
 
-
 void init_colors(void)
 {
-        start_color();
-        if (can_change_color() && COLORS >= 8) {
-                init_color(COLOR_CYAN, 0, 800, 800);
-                init_color(COLOR_BLUE, 0, 0, 200);
-        }
+	start_color();
+	use_default_colors();
 
-        init_pair(CP_BASE, COLOR_CYAN, COLOR_BLACK);
-        init_pair(CP_MAIN_BOX, COLOR_WHITE, COLOR_BLUE);
-        init_pair(CP_BUTTON, COLOR_BLACK, COLOR_CYAN);
-        init_pair(CP_BUTTON_HOVER, COLOR_BLACK, COLOR_WHITE);
-        init_pair(CP_SHADOW, COLOR_BLACK, COLOR_BLACK);
-        init_pair(CP_TITLE, COLOR_MAGENTA, COLOR_BLACK);
-        init_pair(CP_WARNING, COLOR_WHITE, COLOR_RED);
-        init_pair(CP_GRID, COLOR_BLUE, COLOR_BLACK);
+	init_pair(CP_DEFAULT, COLOR_WHITE, -1);
+	init_pair(CP_FRAME, COLOR_WHITE, -1);
+	init_pair(CP_ACCENT, COLOR_WHITE, -1);
+	init_pair(CP_INVERT, COLOR_BLACK, COLOR_WHITE);
+	init_pair(CP_WARN, COLOR_WHITE, COLOR_RED);
+	init_pair(CP_DIM, COLOR_BLACK, -1);
+	init_pair(CP_METER_ON, COLOR_WHITE, -1);
+	init_pair(CP_METER_OFF, COLOR_BLACK, -1);
 }
 
-/**
- * Draws a shadow under a box.
- *
- * This function is used to draw a shadow under a box. It is used to give a box a 3D
- * appearance. The shadow is drawn using spaces and is two pixels larger than the
- * box it is drawn under.
- *
- * @param y The y coordinate of the box.
- * @param x The x coordinate of the box.
- * @param h The height of the box.
- * @param w The width of the box.
- */
-void draw_shadow(int y, int x, int h, int w)
+void draw_background(void)
 {
-        attron(COLOR_PAIR(CP_SHADOW) | A_BOLD);
-        for (int i = 0; i < h; i++) {
-                mvprintw(y + i, x, "%*s", w, " ");
-        }
-        attroff(COLOR_PAIR(CP_SHADOW) | A_BOLD);
+	attron(COLOR_PAIR(CP_DIM) | A_BOLD);
+	for (int y = 0; y < rows; y += 2) {
+		for (int x = 0; x < cols; x += 4) {
+			mvaddstr(y, x, "+");
+		}
+	}
+	attroff(COLOR_PAIR(CP_DIM) | A_BOLD);
+
+	attron(COLOR_PAIR(CP_INVERT));
+	mvhline(0, 0, ' ', cols);
+	mvprintw(0, 1, " OVERSEER MONIT ");
+	
+	char time_str[64];
+	time_t now = time(NULL);
+	struct tm *t = localtime(&now);
+	strftime(time_str, sizeof(time_str), "%H:%M:%S", t);
+	mvprintw(0, cols - 10, " %s ", time_str);
+	attroff(COLOR_PAIR(CP_INVERT));
+
+	attron(COLOR_PAIR(CP_FRAME) | A_DIM);
+	mvhline(rows - 1, 0, ACS_HLINE, cols);
+	mvprintw(rows - 1, 2, " CPU: 1%%  MEM: 124MB  NET: IDLE ");
+	attroff(COLOR_PAIR(CP_FRAME) | A_DIM);
 }
 
-
-/**
- * Draws the background grid.
- *
- * This function is used to draw the background grid. The grid is drawn using
- * periods and is used to give the terminal a grid-like appearance.
- */
-void draw_background_grid(void)
+void draw_btop_box(int y, int x, int h, int w, const char *title)
 {
-        attron(COLOR_PAIR(CP_GRID) | A_DIM);
-        for (int y = 0; y < rows; y += 2) {
-                for (int x = 0; x < cols; x += 4) {
-                        mvaddch(y, x, '.');
-                }
-        }
-        attroff(COLOR_PAIR(CP_GRID) | A_DIM);
+	attron(COLOR_PAIR(CP_FRAME));
+	mvaddstr(y, x, "╭");
+	mvaddstr(y, x + w - 1, "╮");
+	mvaddstr(y + h - 1, x, "╰");
+	mvaddstr(y + h - 1, x + w - 1, "╯");
 
-        attron(COLOR_PAIR(CP_BUTTON));
-        mvprintw(0, 0, "%*s", cols, " ");
-        mvprintw(0, 1, " NETWORK TERMINAL");
-        mvprintw(0, cols - 20, " TIME: %ld ", time(NULL) % 10000);
-        attroff(COLOR_PAIR(CP_BUTTON));
+	mvhline(y, x + 1, ACS_HLINE, w - 2);
+	mvhline(y + h - 1, x + 1, ACS_HLINE, w - 2);
+	mvvline(y + 1, x, ACS_VLINE, h - 2);
+	mvvline(y + 1, x + w - 1, ACS_VLINE, h - 2);
+	attroff(COLOR_PAIR(CP_FRAME));
 
-        attron(COLOR_PAIR(CP_BUTTON));
-        mvprintw(rows - 1, 0, "%*s", cols, " ");
-        mvprintw(rows - 1, 1, " STATUS: %s ", connected_to_server ? "LINKED" : "IDLE");
-        mvprintw(rows - 1, cols - 15, " MOUSE: %03d,%03d ", event.x, event.y);
-        attroff(COLOR_PAIR(CP_BUTTON));
+	if (title) {
+		attron(COLOR_PAIR(CP_ACCENT) | A_BOLD);
+		mvprintw(y, x + 2, " %s ", title);
+		attroff(COLOR_PAIR(CP_ACCENT) | A_BOLD);
+	}
 }
 
-/**
- * Draws a fancy box with a given title.
- *
- * This function is used to draw a fancy box with a given title. It is used
- * to draw boxes with titles in the terminal.
- *
- * @param y The y coordinate of the box.
- * @param x The x coordinate of the box.
- * @param h The height of the box.
- * @param w The width of the box.
- * @param title The title of the box.
- */
-void draw_fancy_box(int y, int x, int h, int w, char *title)
+void draw_meter(int y, int x, int w, int percent)
 {
-        draw_shadow(y + 1, x + 2, h, w);
+	int bar_width = w - 2;
+	int fill = (bar_width * percent) / 100;
 
-        attron(COLOR_PAIR(CP_MAIN_BOX));
-        for (int i = 0; i < h; i++) {
-                mvprintw(y + i, x, "%*s", w, " ");
-        }
+	attron(COLOR_PAIR(CP_FRAME) | A_DIM);
+	mvaddch(y, x, '[');
+	mvaddch(y, x + w - 1, ']');
+	attroff(COLOR_PAIR(CP_FRAME) | A_DIM);
 
-        mvprintw(y, x, "╔");
-        for (int i = 0; i < w - 2; i++) addstr("═");
-        addstr("╗");
-
-        for (int i = 1; i < h - 1; i++) {
-                mvprintw(y + i, x, "║");
-                mvprintw(y + i, x + w - 1, "║");
-        }
-
-        mvprintw(y + h - 1, x, "╚");
-        for (int i = 0; i < w - 2; i++) addstr("═");
-        addstr("╝");
-
-        if (title) {
-                int title_len = strlen(title);
-                int tx = x + (w / 2) - (title_len / 2) - 2;
-                mvprintw(y, tx, "╡ %s ╞", title);
-        }
-        attroff(COLOR_PAIR(CP_MAIN_BOX));
+	for (int i = 0; i < bar_width; i++) {
+		if (i < fill) {
+			attron(COLOR_PAIR(CP_METER_ON) | A_BOLD);
+			mvaddstr(y, x + 1 + i, "/");
+			attroff(COLOR_PAIR(CP_METER_ON) | A_BOLD);
+		} else {
+			attron(COLOR_PAIR(CP_METER_OFF) | A_BOLD);
+			mvaddstr(y, x + 1 + i, "-");
+			attroff(COLOR_PAIR(CP_METER_OFF) | A_BOLD);
+		}
+	}
 }
 
-/**
- * Draws a styled button with a given text and size.
- *
- * This function is used to draw a styled button with a given text and size.
- * It is used to draw buttons in the terminal.
- *
- * @param y The y coordinate of the button.
- * @param x The x coordinate of the button.
- * @param w The width of the button.
- * @param text The text of the button.
- * @param pair_normal The color pair for a normal button.
- * @param pair_hover The color pair for a hover button.
- * @param clicked Whether the button is currently clicked.
- */
-void draw_styled_button(int y, int x, int w, char *text, int pair_normal, int pair_hover, bool clicked)
+void draw_button_btop(int y, int x, int w, const char *text, bool active)
 {
-        draw_shadow(y + 1, x + 2, 1, w);
+	bool hover = (event.y >= y && event.y < y + 3 && event.x >= x && event.x < x + w);
+	int color = active ? CP_INVERT : CP_FRAME;
+	
+	if (hover) color = CP_INVERT;
 
-        bool is_hover = (event.y == y && event.x >= x && event.x < x + w);
-        int pair = is_hover ? pair_hover : pair_normal;
+	attron(COLOR_PAIR(color));
+	mvhline(y, x, ' ', w);
+	mvhline(y + 1, x, ' ', w);
+	mvhline(y + 2, x, ' ', w);
+	
+	if (!hover && !active) {
+		attroff(COLOR_PAIR(color));
+		attron(COLOR_PAIR(CP_FRAME));
+		mvaddch(y, x, ACS_ULCORNER);
+		mvaddch(y, x + w - 1, ACS_URCORNER);
+		mvaddch(y + 2, x, ACS_LLCORNER);
+		mvaddch(y + 2, x + w - 1, ACS_LRCORNER);
+		mvhline(y, x + 1, ACS_HLINE, w - 2);
+		mvhline(y + 2, x + 1, ACS_HLINE, w - 2);
+		mvvline(y + 1, x, ACS_VLINE, 1);
+		mvvline(y + 1, x + w - 1, ACS_VLINE, 1);
+		attroff(COLOR_PAIR(CP_FRAME));
+		attron(COLOR_PAIR(CP_DEFAULT) | A_BOLD);
+	} else {
+		attron(A_BOLD);
+	}
 
-        if (clicked && is_hover) attron(A_REVERSE);
-
-        attron(COLOR_PAIR(pair) | A_BOLD);
-        int pad = (w - strlen(text)) / 2;
-        mvprintw(y, x, "%*s%s%*s", pad, " ", text, w - pad - strlen(text), " ");
-        attroff(COLOR_PAIR(pair) | A_BOLD);
-
-        if (clicked && is_hover) attroff(A_REVERSE);
+	int text_len = strlen(text);
+	int pad = (w - text_len) / 2;
+	mvprintw(y + 1, x + pad, "%s", text);
+	attroff(COLOR_PAIR(color) | A_BOLD);
 }
 
-/**
- * Draws a progress bar with a fancy box.
- *
- * This function is used to draw a progress bar with a fancy box. It is used
- * to draw progress bars in the terminal.
- *
- * @param y The y coordinate of the progress bar.
- * @param x The x coordinate of the progress bar.
- * @param w The width of the progress bar.
- */
-void draw_progress_bar_fancy(int y, int x, int w)
+void draw_server_table(void)
 {
-        draw_shadow(y + 1, x + 1, 1, w);
+	if (scan_in_progress) return;
 
-        attron(COLOR_PAIR(CP_MAIN_BOX));
-        mvprintw(y, x, "[");
-        mvprintw(y, x + w - 1, "]");
-        attroff(COLOR_PAIR(CP_MAIN_BOX));
+	int start_y = target_row_start + 2;
+	
+	pthread_mutex_lock(&list_mutex);
 
-        int inner_w = w - 2;
-        int filled = (inner_w * scan_render_cycle) / 20;
+	attron(COLOR_PAIR(CP_DIM));
+	mvprintw(start_y, target_cols_start + 2, "   %-6s %-20s %-8s %-10s ", "ID", "IP ADDRESS", "PORT", "STATUS");
+	attroff(COLOR_PAIR(CP_DIM));
 
-        attron(COLOR_PAIR(CP_TITLE) | A_BOLD);
-        for (int i = 0; i < inner_w; i++) {
-                if (i < filled) mvaddstr(y, x + 1 + i, "▓");
-                else mvaddstr(y, x + 1 + i, "░");
-        }
-        attroff(COLOR_PAIR(CP_TITLE) | A_BOLD);
+	mvhline(start_y + 1, target_cols_start + 1, ACS_HLINE, target_cols_end - target_cols_start - 2);
+
+	for (int i = 0; i < server_count; i++) {
+		int row_y = start_y + 2 + i;
+		if (row_y >= target_row_end - 1) break;
+
+		bool hover = (event.y == row_y && event.x > target_cols_start && event.x < target_cols_end);
+
+		if (hover) {
+			attron(COLOR_PAIR(CP_INVERT));
+			mvhline(row_y, target_cols_start + 1, ' ', target_cols_end - target_cols_start - 2);
+			mvprintw(row_y, target_cols_start + 2, " > %04d   %-20s %-8d %-10s ", 
+				 server_list[i].server_id, server_list[i].ip, server_list[i].port, "ONLINE");
+			attroff(COLOR_PAIR(CP_INVERT));
+		} else {
+			attron(COLOR_PAIR(CP_DEFAULT));
+			if (i % 2 != 0) attron(A_DIM);
+			mvprintw(row_y, target_cols_start + 2, "   %04d   %-20s %-8d %-10s ", 
+				 server_list[i].server_id, server_list[i].ip, server_list[i].port, "ONLINE");
+			if (i % 2 != 0) attroff(A_DIM);
+			attroff(COLOR_PAIR(CP_DEFAULT));
+		}
+	}
+	pthread_mutex_unlock(&list_mutex);
 }
 
-
-/**
- * Draws the server list panel with a fancy box.
- *
- * This function is used to draw the server list panel with a fancy box. It is used
- * to draw the server list panel in the terminal.
- */
-void draw_server_list_panel(void)
+void popup_input_btop(void)
 {
-        if (scan_in_progress) return;
+	int w = 50, h = 8;
+	int y = rows / 2 - h / 2;
+	int x = cols / 2 - w / 2;
 
-        int list_start_y = target_row_start + 2;
+	attron(COLOR_PAIR(CP_DEFAULT));
+	for(int i=0; i<h; i++) mvhline(y+i, x, ' ', w);
+	draw_btop_box(y, x, h, w, "SECURE TRANSMISSION");
 
-        pthread_mutex_lock(&list_mutex);
+	mvprintw(y + 2, x + 2, "ENTER PAYLOAD:");
+	
+	attron(A_REVERSE);
+	mvhline(y + 4, x + 2, ' ', w - 4);
+	attroff(A_REVERSE);
 
-        attron(COLOR_PAIR(CP_MAIN_BOX) | A_UNDERLINE);
-        mvprintw(list_start_y - 1, target_cols_start + 2, "   SERVER IP      |  PORT  |   ID   ");
-        attroff(COLOR_PAIR(CP_MAIN_BOX) | A_UNDERLINE);
+	echo();
+	curs_set(1);
+	char buf[128] = {0};
+	move(y + 4, x + 2);
+	timeout(-1);
+	getnstr(buf, w - 5);
+	timeout(10);
+	noecho();
+	curs_set(0);
 
-        for (int i = 0; i < server_count; i++) {
-                int y = list_start_y + i;
-                if (y >= target_row_end - 2) break;
-
-                bool hover = (event.y == y && event.x >= target_cols_start + 1 && event.x < target_cols_end - 1);
-
-                if (hover) {
-                        attron(COLOR_PAIR(CP_BUTTON_HOVER) | A_BOLD);
-                        mvprintw(y, target_cols_start + 1, "%*s", target_cols_end - target_cols_start - 2, " ");
-                } else {
-                        attron(COLOR_PAIR(CP_MAIN_BOX));
-                }
-
-                mvprintw(y, target_cols_start + 2, " %-16s | %-6d | #%04d ",
-                         server_list[i].ip, server_list[i].port, server_list[i].server_id);
-
-                if (hover) attroff(COLOR_PAIR(CP_BUTTON_HOVER) | A_BOLD);
-                else attroff(COLOR_PAIR(CP_MAIN_BOX));
-        }
-        pthread_mutex_unlock(&list_mutex);
+	if (strlen(buf) > 0) {
+		attron(COLOR_PAIR(CP_INVERT) | A_BLINK);
+		mvprintw(y + 6, x + w / 2 - 5, " SENDING ");
+		attroff(COLOR_PAIR(CP_INVERT) | A_BLINK);
+		refresh();
+		send_message(current_server.ip, current_server.port, buf);
+		usleep(300000);
+	}
+	attroff(COLOR_PAIR(CP_DEFAULT));
 }
 
-/**
- * Pops up an input message box for the user to enter a message payload.
- *
- * This function is used to popup an input message box for the user to enter a message
- * payload. It is used to get a message payload from the user.
- */
-void popup_input_message(void)
+void handle_input_btop(pthread_t *thread_ptr)
 {
-        int w = 50, h = 10;
-        int sy = rows / 2 - h / 2, sx = cols / 2 - w / 2;
+	int box_w = target_cols_end - target_cols_start;
+	
+	if (!connected_to_server && !scan_in_progress) {
+		int btn_w = 16;
+		int btn_x = target_cols_start + box_w - btn_w - 2;
+		int btn_y = target_row_start; 
 
-        draw_fancy_box(sy, sx, h, w, "SECURE COMMS");
+		if (last_click_y >= btn_y && last_click_y <= btn_y + 2 &&
+		    last_click_x >= btn_x && last_click_x <= btn_x + btn_w) {
+			
+			pthread_mutex_lock(&list_mutex);
+			server_count = 0;
+			pthread_mutex_unlock(&list_mutex);
 
-        attron(COLOR_PAIR(CP_MAIN_BOX));
-        mvprintw(sy + 3, sx + 2, "ENTER MESSAGE PAYLOAD:");
+			scan_in_progress = true;
+			scan_render_cycle = 0;
+			gettimeofday(&scan_last_time, NULL);
 
-        attron(A_REVERSE);
-        mvprintw(sy + 5, sx + 2, "%*s", w - 4, " ");
-        attroff(A_REVERSE);
-        attroff(COLOR_PAIR(CP_MAIN_BOX));
+			beacon_thread_active = true;
+			if (*thread_ptr) pthread_join(*thread_ptr, NULL);
+			pthread_create(thread_ptr, NULL, beacon_listener, NULL);
+			return;
+		}
 
-        echo();
-        curs_set(1);
-        char buf[128] = {0};
-        move(sy + 5, sx + 2);
-        timeout(-1);
-        getnstr(buf, w - 5);
-        timeout(10);
-        noecho();
-        curs_set(0);
+		int list_start_y = target_row_start + 4;
+		for (int i = 0; i < server_count; i++) {
+			if (last_click_y == list_start_y + i && 
+			    last_click_x > target_cols_start && 
+			    last_click_x < target_cols_end) {
+				
+				current_server = server_list[i];
+				int w = 34, h = 5;
+				int cy = rows / 2 - h / 2, cx = cols / 2 - w / 2;
+				
+				attron(COLOR_PAIR(CP_DEFAULT));
+				for(int k=0; k<h; k++) mvhline(cy+k, cx, ' ', w);
+				draw_btop_box(cy, cx, h, w, "HANDSHAKE");
+				
+				attron(A_BLINK);
+				mvprintw(cy + 2, cx + 2, " ESTABLISHING LINK... ");
+				attroff(A_BLINK);
+				attroff(COLOR_PAIR(CP_DEFAULT));
+				refresh();
 
-        if (strlen(buf) > 0) {
-                attron(COLOR_PAIR(CP_BUTTON) | A_BLINK);
-                mvprintw(sy + 7, sx + w / 2 - 5, " SENDING ");
-                attroff(COLOR_PAIR(CP_BUTTON) | A_BLINK);
-                refresh();
-                send_message(current_server.ip, current_server.port, buf);
-                usleep(400000);
-        }
-}
+				if (connect_handshake(current_server.ip, current_server.port) == 0) {
+					connected_to_server = true;
+				} else {
+					attron(COLOR_PAIR(CP_WARN) | A_BOLD);
+					mvprintw(cy + 2, cx + 2, " CONNECTION REFUSED   ");
+					attroff(COLOR_PAIR(CP_WARN) | A_BOLD);
+					refresh();
+					usleep(500000);
+				}
+				return;
+			}
+		}
+	}
 
-/**
- * Handles a mouse click event. If the user is not connected to a server and not
- * scanning for servers, the function will reset the server list and start scanning
- * for servers when the user clicks on the "SCAN" button.
- */
-void handle_mouse_click(pthread_t *thread_ptr)
-{
-        if (!connected_to_server && !scan_in_progress) {
-                int btn_w = 20;
-                int btn_x = target_cols_start + (target_cols_end - target_cols_start) / 2 - btn_w / 2;
-                int btn_y = target_row_end - 2;
+	if (connected_to_server) {
+		int btn_w = 20;
+		int btn_start_x = target_cols_start + 4;
+		int btn_msg_y = target_row_start + 8;
+		int btn_disc_y = target_row_start + 12;
 
-                if (last_click_y == btn_y && last_click_x >= btn_x && last_click_x <= btn_x + btn_w) {
-                        pthread_mutex_lock(&list_mutex);
-                        server_count = 0;
-                        pthread_mutex_unlock(&list_mutex);
+		if (last_click_y >= btn_msg_y && last_click_y < btn_msg_y + 3 && 
+		    last_click_x >= btn_start_x && last_click_x < btn_start_x + btn_w) {
+			popup_input_btop();
+		}
 
-                        scan_in_progress = true;
-                        scan_render_cycle = 0;
-                        gettimeofday(&scan_last_time, NULL);
-
-                        beacon_thread_active = true;
-                        if (*thread_ptr) pthread_join(*thread_ptr, NULL);
-                        pthread_create(thread_ptr, NULL, beacon_listener, NULL);
-                        return;
-                }
-
-                int start_y = target_row_start + 2;
-                for (int i = 0; i < server_count; i++) {
-                        if (last_click_y == start_y + i && last_click_x > target_cols_start && last_click_x < target_cols_end) {
-                                current_server = server_list[i];
-
-                                int mw = 30, mh = 5;
-                                draw_fancy_box(rows / 2 - mh / 2, cols / 2 - mw / 2, mh, mw, "SYSTEM");
-                                attron(COLOR_PAIR(CP_MAIN_BOX));
-                                mvprintw(rows / 2, cols / 2 - 6, "CONNECTING...");
-                                attroff(COLOR_PAIR(CP_MAIN_BOX));
-                                refresh();
-
-                                if (connect_handshake(current_server.ip, current_server.port) == 0) {
-                                        connected_to_server = true;
-                                } else {
-                                        draw_fancy_box(rows / 2 - mh / 2, cols / 2 - mw / 2, mh, mw, "ERROR");
-                                        attron(COLOR_PAIR(CP_WARNING));
-                                        mvprintw(rows / 2, cols / 2 - 4, " FAILED ");
-                                        attroff(COLOR_PAIR(CP_WARNING));
-                                        refresh();
-                                        usleep(600000);
-                                }
-                                return;
-                        }
-                }
-        }
-
-        if (connected_to_server) {
-                int btn_base_x = target_cols_start + 4;
-                int btn_msg_y = target_row_start + 5;
-                int btn_disc_y = target_row_start + 7;
-                int btn_w = 22;
-
-                if (last_click_y == btn_msg_y && last_click_x >= btn_base_x && last_click_x < btn_base_x + btn_w) {
-                        popup_input_message();
-                }
-
-                if (last_click_y == btn_disc_y && last_click_x >= btn_base_x && last_click_x < btn_base_x + btn_w) {
-                        connected_to_server = false;
-                }
-        }
+		if (last_click_y >= btn_disc_y && last_click_y < btn_disc_y + 3 && 
+		    last_click_x >= btn_start_x && last_click_x < btn_start_x + btn_w) {
+			connected_to_server = false;
+		}
+	}
 }

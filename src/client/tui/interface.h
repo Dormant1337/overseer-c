@@ -3,22 +3,22 @@
 
 #include <pthread.h>
 
-#define CP_BASE         1
-#define CP_MAIN_BOX     2
-#define CP_BUTTON       3
-#define CP_BUTTON_HOVER 4
-#define CP_SHADOW       5
-#define CP_TITLE        6
-#define CP_WARNING      7
-#define CP_GRID         8
+#define CP_DEFAULT      1
+#define CP_FRAME        2
+#define CP_ACCENT       3
+#define CP_INVERT       4
+#define CP_WARN         5
+#define CP_DIM          6
+#define CP_METER_ON     7
+#define CP_METER_OFF    8
 
 void init_colors(void);
-void draw_background_grid(void);
-void draw_fancy_box(int y, int x, int h, int w, char *title);
-void draw_styled_button(int y, int x, int w, char *text, int pair_normal, int pair_hover, bool clicked);
-void draw_progress_bar_fancy(int y, int x, int w);
-void draw_server_list_panel(void);
-void popup_input_message(void);
-void handle_mouse_click(pthread_t *thread_ptr);
+void draw_background(void);
+void draw_btop_box(int y, int x, int h, int w, const char *title);
+void draw_meter(int y, int x, int w, int percent);
+void draw_button_btop(int y, int x, int w, const char *text, bool active);
+void draw_server_table(void);
+void popup_input_btop(void);
+void handle_input_btop(pthread_t *thread_ptr);
 
 #endif
