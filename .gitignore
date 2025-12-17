@@ -1,4 +1,6 @@
-/client/
-/server/
-/.vscode/24
+/client
+/server
+
+.vscode/
+
 /storage/
