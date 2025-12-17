@@ -11,10 +11,10 @@
 #define BEACON_MSG_SIZE 256
 
 struct ServerInfo {
-        char message[128];
-        char ip[16];
-        int port;
-        int server_id;
+	char message[128];
+	char ip[16];
+	int port;
+	int server_id;
 };
 
 extern struct ServerInfo server_list[MAX_SERVERS];

@@ -111,7 +111,8 @@ int main(void)
 				attroff(COLOR_PAIR(CP_DIM));
 
 				draw_button_btop(target_row_start + 8, target_cols_start + 4, 20, "SEND PAYLOAD", true);
-				draw_button_btop(target_row_start + 12, target_cols_start + 4, 20, "TERMINATE", false);
+				draw_button_btop(target_row_start + 12, target_cols_start + 4, 20, "SEND FILE", true);
+				draw_button_btop(target_row_start + 16, target_cols_start + 4, 20, "TERMINATE", false);
 			}
 		}
 

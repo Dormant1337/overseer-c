@@ -2,6 +2,7 @@
 #define INTERFACE_H
 
 #include <pthread.h>
+#include <stddef.h>
 
 #define CP_DEFAULT      1
 #define CP_FRAME        2
@@ -19,6 +20,8 @@ void draw_meter(int y, int x, int w, int percent);
 void draw_button_btop(int y, int x, int w, const char *text, bool active);
 void draw_server_table(void);
 void popup_input_btop(void);
+void popup_file_upload(void);
 void handle_input_btop(pthread_t *thread_ptr);
+void on_upload_progress(size_t sent, size_t total, double speed_mbps);
 
 #endif

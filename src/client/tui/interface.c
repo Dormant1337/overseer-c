@@ -205,6 +205,77 @@ void popup_input_btop(void)
 	attroff(COLOR_PAIR(CP_DEFAULT));
 }
 
+void on_upload_progress(size_t sent, size_t total, double speed_mbps)
+{
+	int w = 50, h = 10;
+	int y = rows / 2 - h / 2;
+	int x = cols / 2 - w / 2;
+
+	int pct = (int)((sent * 100) / total);
+	
+	attron(COLOR_PAIR(CP_DEFAULT));
+	draw_btop_box(y, x, h, w, "UPLOADING FILE");
+	
+	mvprintw(y + 2, x + 2, "Transferred: %zu / %zu bytes", sent, total);
+	mvprintw(y + 3, x + 2, "Speed: %.2f MB/s", speed_mbps);
+
+	draw_meter(y + 5, x + 2, w - 4, pct);
+	
+	attron(A_BOLD);
+	mvprintw(y + 7, x + w / 2 - 3, " %d%% ", pct);
+	attroff(A_BOLD);
+	
+	attroff(COLOR_PAIR(CP_DEFAULT));
+	refresh();
+}
+
+void popup_file_upload(void)
+{
+	int w = 50, h = 8;
+	int y = rows / 2 - h / 2;
+	int x = cols / 2 - w / 2;
+
+	attron(COLOR_PAIR(CP_DEFAULT));
+	for(int i=0; i<h; i++) mvhline(y+i, x, ' ', w);
+	draw_btop_box(y, x, h, w, "FILE UPLOAD");
+
+	mvprintw(y + 2, x + 2, "FILE PATH:");
+	
+	attron(A_REVERSE);
+	mvhline(y + 4, x + 2, ' ', w - 4);
+	attroff(A_REVERSE);
+
+	echo();
+	curs_set(1);
+	char buf[256] = {0};
+	move(y + 4, x + 2);
+	timeout(-1);
+	getnstr(buf, w - 5);
+	timeout(10);
+	noecho();
+	curs_set(0);
+
+	if (strlen(buf) > 0) {
+		int res = send_file_to_server(current_server.ip, current_server.port, buf, on_upload_progress);
+		
+		for(int i=0; i<h; i++) mvhline(y+i, x, ' ', w);
+		draw_btop_box(y, x, h, w, "STATUS");
+		
+		if (res == 0) {
+			attron(COLOR_PAIR(CP_INVERT));
+			mvprintw(y+3, x+w/2-8, " UPLOAD COMPLETE ");
+			attroff(COLOR_PAIR(CP_INVERT));
+		} else {
+			attron(COLOR_PAIR(CP_WARN) | A_BOLD);
+			mvprintw(y+3, x+w/2-6, " UPLOAD FAILED ");
+			attroff(COLOR_PAIR(CP_WARN) | A_BOLD);
+		}
+		refresh();
+		usleep(1000000);
+	}
+	attroff(COLOR_PAIR(CP_DEFAULT));
+}
+
 void handle_input_btop(pthread_t *thread_ptr)
 {
 	int box_w = target_cols_end - target_cols_start;
@@ -269,11 +340,17 @@ void handle_input_btop(pthread_t *thread_ptr)
 		int btn_w = 20;
 		int btn_start_x = target_cols_start + 4;
 		int btn_msg_y = target_row_start + 8;
-		int btn_disc_y = target_row_start + 12;
+		int btn_file_y = target_row_start + 12;
+		int btn_disc_y = target_row_start + 16;
 
 		if (last_click_y >= btn_msg_y && last_click_y < btn_msg_y + 3 && 
 		    last_click_x >= btn_start_x && last_click_x < btn_start_x + btn_w) {
 			popup_input_btop();
+		}
+
+		if (last_click_y >= btn_file_y && last_click_y < btn_file_y + 3 && 
+		    last_click_x >= btn_start_x && last_click_x < btn_start_x + btn_w) {
+			popup_file_upload();
 		}
 
 		if (last_click_y >= btn_disc_y && last_click_y < btn_disc_y + 3 && 
