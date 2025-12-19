@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/time.h>
+#include <stdatomic.h>
 #include "globals.h"
 #include "tui/interface.h"
 #include "system/network.h"
@@ -22,7 +23,7 @@ int scan_render_cycle = 0;
 int ui_render_cycle = 0;
 struct timeval scan_last_time;
 struct timeval ui_last_time;
-volatile bool beacon_thread_active = false;
+atomic_bool beacon_thread_active = false;
 
 int rows, cols;
 int target_row_start, target_row_end;
@@ -48,6 +49,8 @@ int main(void)
 	pthread_t beacon_thread = 0;
 	gettimeofday(&scan_last_time, NULL);
 	gettimeofday(&ui_last_time, NULL);
+
+	atomic_store(&beacon_thread_active, false);
 
 	while (1) {
 		getmaxyx(stdscr, rows, cols);
@@ -138,7 +141,7 @@ int main(void)
 				scan_last_time = now;
 				if (scan_render_cycle > 20) {
 					scan_in_progress = false;
-					beacon_thread_active = false;
+					atomic_store(&beacon_thread_active, false);
 					if (beacon_thread) pthread_join(beacon_thread, NULL);
 				}
 			}
@@ -147,7 +150,7 @@ int main(void)
 		refresh();
 	}
 
-	beacon_thread_active = false;
+	atomic_store(&beacon_thread_active, false);
 	if (beacon_thread) pthread_join(beacon_thread, NULL);
 	endwin();
 	printf("\033[?1003l\n");

@@ -19,7 +19,7 @@ gcc src/client/main.c \
     src/client/system/network.c \
     src/client/tui/interface.c \
     -o client \
-    -lncurses -lpthread
+    -lncurses -lpthread -latomic
 
 if [ $? -eq 0 ]; then
     echo "Client compiled successfully."

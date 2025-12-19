@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <libgen.h>
+#include <stdatomic.h>
 #include "network.h"
 #include "../globals.h"
 
@@ -157,7 +158,7 @@ void *beacon_listener(void *arg)
 	struct timeval tv = {0, 100000};
 	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-	while (beacon_thread_active) {
+	while (atomic_load(&beacon_thread_active)) {
 		sender_len = sizeof(sender_addr);
 		if (recvfrom(sock, buffer, sizeof(buffer) - 1, 0, (struct sockaddr *)&sender_addr, &sender_len) > 0) {
 			char ip_str[16], real_ip[16];

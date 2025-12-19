@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <netinet/in.h>
 #include <ncurses.h>
+#include <stdatomic.h>
 
 #define MAX_SERVERS 16
 #define BEACON_PORT 9999
@@ -25,9 +26,9 @@ extern pthread_mutex_t list_mutex;
 extern bool connected_to_server;
 extern bool scan_in_progress;
 extern int scan_render_cycle;
-extern int ui_render_cycle; 
+extern int ui_render_cycle;
 extern struct timeval scan_last_time;
-extern volatile bool beacon_thread_active;
+extern atomic_bool beacon_thread_active;
 
 extern int rows, cols;
 extern int target_row_start, target_row_end;

@@ -5,6 +5,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <stdatomic.h>
 #include "interface.h"
 #include "../globals.h"
 #include "../system/network.h"
@@ -331,53 +332,62 @@ void handle_input_btop(pthread_t *thread_ptr)
 			pthread_mutex_lock(&list_mutex);
 			server_count = 0;
 			pthread_mutex_unlock(&list_mutex);
+			
+			atomic_store(&beacon_thread_active, true);
 
 			scan_in_progress = true;
 			scan_render_cycle = 0;
 			gettimeofday(&scan_last_time, NULL);
 
-			beacon_thread_active = true;
 			if (*thread_ptr) pthread_join(*thread_ptr, NULL);
 			pthread_create(thread_ptr, NULL, beacon_listener, NULL);
 			return;
 		}
 
 		int list_start_y = target_row_start + 4;
+		int clicked_index = -1;
+		
+		pthread_mutex_lock(&list_mutex);
 		for (int i = 0; i < server_count; i++) {
 			if (last_click_y == list_start_y + i && 
 			    last_click_x > target_cols_start && 
 			    last_click_x < target_cols_end) {
-				
 				current_server = server_list[i];
-				int w = 34, h = 8;
-				int cy = rows / 2 - h / 2, cx = cols / 2 - w / 2;
-				
-				attron(COLOR_PAIR(CP_DEFAULT));
-				for(int k=0; k<h; k++) mvhline(cy+k, cx, ' ', w);
-				draw_btop_box(cy, cx, h, w, "HANDSHAKE");
-				
-				draw_spinner(cy + 2, cx + w/2 - 4);
-
-				attron(A_BLINK);
-				mvprintw(cy + 6, cx + 2, " ESTABLISHING LINK... ");
-				attroff(A_BLINK);
-				attroff(COLOR_PAIR(CP_DEFAULT));
-				refresh();
-				
-				usleep(500000); 
-
-				if (connect_handshake(current_server.ip, current_server.port) == 0) {
-					connected_to_server = true;
-				} else {
-					attron(COLOR_PAIR(CP_WARN) | A_BOLD);
-					mvprintw(cy + 6, cx + 2, " CONNECTION REFUSED   ");
-					attroff(COLOR_PAIR(CP_WARN) | A_BOLD);
-					refresh();
-					usleep(500000);
-				}
-				return;
+				clicked_index = i;
+				break;
 			}
 		}
+		pthread_mutex_unlock(&list_mutex);
+
+		if (clicked_index != -1) {
+			int w = 34, h = 8;
+			int cy = rows / 2 - h / 2, cx = cols / 2 - w / 2;
+			
+			attron(COLOR_PAIR(CP_DEFAULT));
+			for(int k=0; k<h; k++) mvhline(cy+k, cx, ' ', w);
+			draw_btop_box(cy, cx, h, w, "HANDSHAKE");
+			
+			draw_spinner(cy + 2, cx + w/2 - 4);
+
+			attron(A_BLINK);
+			mvprintw(cy + 6, cx + 2, " ESTABLISHING LINK... ");
+			attroff(A_BLINK);
+			attroff(COLOR_PAIR(CP_DEFAULT));
+			refresh();
+			
+			usleep(500000); 
+
+			if (connect_handshake(current_server.ip, current_server.port) == 0) {
+				connected_to_server = true;
+			} else {
+				attron(COLOR_PAIR(CP_WARN) | A_BOLD);
+				mvprintw(cy + 6, cx + 2, " CONNECTION REFUSED   ");
+				attroff(COLOR_PAIR(CP_WARN) | A_BOLD);
+				refresh();
+				usleep(500000);
+			}
+		}
+		return;
 	}
 
 	if (connected_to_server) {
