@@ -17,6 +17,7 @@ echo "Compiling Client..."
 #starting compiling client...
 gcc src/client/main.c \
     src/client/system/network.c \
+    src/client/system/api.c \
     src/client/tui/interface.c \
     -o client \
     -lncurses -lpthread -latomic

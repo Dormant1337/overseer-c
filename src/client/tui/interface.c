@@ -8,7 +8,7 @@
 #include <stdatomic.h>
 #include "interface.h"
 #include "../globals.h"
-#include "../system/network.h"
+#include "../system/api.h"
 
 static const char *spinner_frames[25][4] = {
 	{"┌──     ", "        ", "        ", "        "}, {" ───    ", "        ", "        ", "        "},
@@ -235,7 +235,9 @@ void popup_input_btop(void)
 		mvprintw(y + 6, x + w / 2 - 5, " SENDING ");
 		attroff(COLOR_PAIR(CP_INVERT) | A_BLINK);
 		refresh();
-		send_message(current_server.ip, current_server.port, buf);
+		
+		core_send_message(current_server.ip, current_server.port, buf);
+		
 		usleep(300000);
 	}
 	attroff(COLOR_PAIR(CP_DEFAULT));
@@ -296,7 +298,7 @@ void popup_file_upload(void)
 	curs_set(0);
 
 	if (strlen(buf) > 0) {
-		int res = send_file_to_server(current_server.ip, current_server.port, buf, on_upload_progress);
+		int res = core_upload_file(current_server.ip, current_server.port, buf, on_upload_progress);
 		
 		attron(COLOR_PAIR(CP_DEFAULT));
 		for(int i=0; i<h; i++) mvhline(y+i, x, ' ', w);
@@ -329,18 +331,11 @@ void handle_input_btop(pthread_t *thread_ptr)
 		if (last_click_y >= btn_y && last_click_y <= btn_y + 2 &&
 		    last_click_x >= btn_x && last_click_x <= btn_x + btn_w) {
 			
-			pthread_mutex_lock(&list_mutex);
-			server_count = 0;
-			pthread_mutex_unlock(&list_mutex);
-			
-			atomic_store(&beacon_thread_active, true);
-
 			scan_in_progress = true;
 			scan_render_cycle = 0;
 			gettimeofday(&scan_last_time, NULL);
-
-			if (*thread_ptr) pthread_join(*thread_ptr, NULL);
-			pthread_create(thread_ptr, NULL, beacon_listener, NULL);
+			
+			core_start_scan(thread_ptr);
 			return;
 		}
 
@@ -377,7 +372,7 @@ void handle_input_btop(pthread_t *thread_ptr)
 			
 			usleep(500000); 
 
-			if (connect_handshake(current_server.ip, current_server.port) == 0) {
+			if (core_connect(current_server.ip, current_server.port) == 0) {
 				connected_to_server = true;
 			} else {
 				attron(COLOR_PAIR(CP_WARN) | A_BOLD);

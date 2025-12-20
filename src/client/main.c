@@ -10,7 +10,7 @@
 #include <stdatomic.h>
 #include "globals.h"
 #include "tui/interface.h"
-#include "system/network.h"
+#include "system/api.h" 
 
 pthread_mutex_t list_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct ServerInfo server_list[MAX_SERVERS];
