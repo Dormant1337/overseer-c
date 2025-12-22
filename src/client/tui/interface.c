@@ -13,6 +13,11 @@
 #define INPUT_BUFFER_SIZE 256
 #define FILEPATH_BUFFER_SIZE 512
 
+/* Define allowed upload directory */
+#ifndef UPLOAD_BASE_DIR
+#define UPLOAD_BASE_DIR "./uploads"
+#endif
+
 static int safe_getnstr(char *buf, size_t buf_size, int max_chars);
 static void safe_popup_dimensions(int *w, int *h, int *x, int *y);
 
@@ -345,6 +350,9 @@ void popup_file_upload(void)
 	int y = rows / 2 - h / 2;
 	int x = cols / 2 - w / 2;
 
+	char input_buf[FILEPATH_BUFFER_SIZE] = {0};
+	char safe_path[FILEPATH_BUFFER_SIZE] = {0};
+
 	safe_popup_dimensions(&w, &h, &x, &y);
 	attron(COLOR_PAIR(CP_DEFAULT));
 
@@ -352,7 +360,7 @@ void popup_file_upload(void)
 		mvhline(y + i, x, ' ', w);
 
 	draw_btop_box(y, x, h, w, "FILE UPLOAD");
-	mvprintw(y + 2, x + 2, "FILE PATH:");
+	mvprintw(y + 2, x + 2, "FILE PATH (relative to %s):", UPLOAD_BASE_DIR);
 
 	attron(A_REVERSE);
 	mvhline(y + 4, x + 2, ' ', w - 4);
@@ -360,23 +368,82 @@ void popup_file_upload(void)
 
 	echo();
 	curs_set(1);
-
-	char buf[FILEPATH_BUFFER_SIZE] = {0};
 	move(y + 4, x + 2);
 	timeout(-1);
 
 	int max_visible = w - 4 - 1;
-	if (max_visible < 0)
-		max_visible = 0;
-	safe_getnstr(buf, sizeof(buf), max_visible);
+	safe_getnstr(input_buf, sizeof(input_buf), max_visible);
 
 	timeout(10);
 	noecho();
 	curs_set(0);
 
-	if (strlen(buf) > 0)
+	if (strlen(input_buf) > 0)
 	{
-		int res = core_upload_file(current_server.ip, current_server.port, buf, on_upload_progress);
+		if (!is_path_safe(input_buf, UPLOAD_BASE_DIR))
+		{
+			attron(COLOR_PAIR(CP_DEFAULT));
+
+			for (int i = 0; i < h; i++)
+				mvhline(y + i, x, ' ', w);
+				
+			draw_btop_box(y, x, h, w, "SECURITY ERROR");
+			attron(COLOR_PAIR(CP_WARN) | A_BOLD);
+
+			mvprintw(y + 3, x + 2, " INVALID FILE PATH ");
+			mvprintw(y + 5, x + 2, " PATH TRAVERSAL DETECTED ");
+			attroff(COLOR_PAIR(CP_WARN) | A_BOLD);
+
+			refresh();
+			usleep(2000000);
+			attroff(COLOR_PAIR(CP_DEFAULT));
+			return;
+		}
+
+		if (!resolve_safe_path(input_buf, safe_path, sizeof(safe_path), UPLOAD_BASE_DIR))
+		{
+			attron(COLOR_PAIR(CP_DEFAULT));
+
+			for (int i = 0; i < h; i++)
+				mvhline(y + i, x, ' ', w);
+
+			draw_btop_box(y, x, h, w, "ERROR");
+			attron(COLOR_PAIR(CP_WARN) | A_BOLD);
+
+			mvprintw(y + 3, x + 2, " CANNOT RESOLVE PATH ");
+			attroff(COLOR_PAIR(CP_WARN) | A_BOLD);
+
+			refresh();
+			usleep(2000000);
+			attroff(COLOR_PAIR(CP_DEFAULT));
+			return;
+		}
+
+		struct stat st;
+
+		if (stat(safe_path, &st) != 0 || !S_ISREG(st.st_mode))
+		{
+			attron(COLOR_PAIR(CP_DEFAULT));
+
+			for (int i = 0; i < h; i++)
+				mvhline(y + i, x, ' ', w);
+
+			draw_btop_box(y, x, h, w, "ERROR");
+			attron(COLOR_PAIR(CP_WARN) | A_BOLD);
+
+			mvprintw(y + 3, x + 2, " FILE NOT FOUND ");
+			mvprintw(y + 5, x + 2, " or not a regular file ");
+			attroff(COLOR_PAIR(CP_WARN) | A_BOLD);
+
+			refresh();
+			usleep(2000000);
+			attroff(COLOR_PAIR(CP_DEFAULT));
+			return;
+		}
+
+		int res = core_upload_file(current_server.ip, current_server.port,
+					   safe_path, on_upload_progress);
+
 		attron(COLOR_PAIR(CP_DEFAULT));
 
 		for (int i = 0; i < h; i++)
