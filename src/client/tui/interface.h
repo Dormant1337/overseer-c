@@ -25,4 +25,9 @@ void popup_file_upload(void);
 void handle_input_btop(pthread_t *thread_ptr);
 void on_upload_progress(size_t sent, size_t total, double speed_mbps);
 
+/* Sanitize and validate file paths against traversal attacks. */
+bool is_path_safe(const char* path, const char* allowed_base);
+
+/* Get absolute path with traversal protection. */
+char* resolve_safe_path(const char* input_path, char* resolved_buffer, size_t buffer_size, const char* allowed_base);
 #endif
