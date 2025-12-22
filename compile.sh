@@ -1,32 +1,31 @@
 #!/bin/bash
 
-# deliting old executables
 rm -f client server
 
 echo "Compiling Server..."
 gcc src/server/main.c -o server -lpthread
 
 if [ $? -eq 0 ]; then
-    echo "Server compiled successfully."
+	echo "Server compiled successfully."
 else
-    echo "Server compilation failed!"
-    exit 1
+	echo "Server compilation failed!"
+	exit 1
 fi
 
 echo "Compiling Client..."
-#starting compiling client...
 gcc src/client/main.c \
-    src/client/system/network.c \
-    src/client/system/api.c \
-    src/client/tui/interface.c \
-    -o client \
-    -lncurses -lpthread -latomic
+	src/client/system/network.c \
+	src/client/system/api.c \
+	src/client/tui/interface.c \
+	src/client/tui/path_security.c \
+	-o client \
+	-lncurses -lpthread -latomic
 
 if [ $? -eq 0 ]; then
-    echo "Client compiled successfully."
+	echo "Client compiled successfully."
 else
-    echo "Client compilation failed!"
-    exit 1
+	echo "Client compilation failed!"
+	exit 1
 fi
 
 echo "Done. Run ./server (optionally with port) and ./client"

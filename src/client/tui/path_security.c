@@ -7,6 +7,9 @@
 #include <libgen.h>
 #include <errno.h>
 #include "interface.h"
+#include <stdio.h>
+#include <unistd.h>
+#include <stdbool.h>
 
 #ifdef PATH_MAX
 #define MAX_PATH_LEN PATH_MAX

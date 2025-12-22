@@ -5,15 +5,16 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <stdatomic.h>
 #include "interface.h"
+#include "path_security.h"
 #include "../globals.h"
 #include "../system/api.h"
 
 #define INPUT_BUFFER_SIZE 256
 #define FILEPATH_BUFFER_SIZE 512
 
-/* Define allowed upload directory */
 #ifndef UPLOAD_BASE_DIR
 #define UPLOAD_BASE_DIR "./uploads"
 #endif
@@ -22,7 +23,32 @@ static int safe_getnstr(char *buf, size_t buf_size, int max_chars);
 static void safe_popup_dimensions(int *w, int *h, int *x, int *y);
 
 static const char *spinner_frames[25][4] = {
-    {"┌──     ", "        ", "        ", "        "}, {" ───    ", "        ", "        ", "        "}, {"  ───   ", "        ", "        ", "        "}, {"   ───  ", "        ", "        ", "        "}, {"    ─── ", "        ", "        ", "        "}, {"     ──┐", "        ", "        ", "        "}, {"      ─┐", "       ╵", "        ", "        "}, {"       ┐", "       │", "        ", "        "}, {"        ", "       │", "       ╵", "        "}, {"        ", "       ╷", "       │", "        "}, {"        ", "        ", "       │", "       ╵"}, {"        ", "        ", "       ╷", "       ┘"}, {"        ", "        ", "        ", "      ─┘"}, {"        ", "        ", "        ", "     ──┘"}, {"        ", "        ", "        ", "    ─── "}, {"        ", "        ", "        ", "   ───  "}, {"        ", "        ", "        ", "  ───   "}, {"        ", "        ", "        ", " ───    "}, {"        ", "        ", "        ", "└──     "}, {"        ", "        ", "        ", "╷       "}, {"        ", "        ", "│       ", "└       "}, {"        ", "╷       ", "│       ", "        "}, {"        ", "│       ", "╵       ", "        "}, {"╷       ", "│       ", "        ", "        "}, {"┌       ", "╵       ", "        ", "        "}};
+	{ "┌──     ", "        ", "        ", "        " },
+	{ " ───    ", "        ", "        ", "        " },
+	{ "  ───   ", "        ", "        ", "        " },
+	{ "   ───  ", "        ", "        ", "        " },
+	{ "    ─── ", "        ", "        ", "        " },
+	{ "     ──┐", "        ", "        ", "        " },
+	{ "      ─┐", "       ╵", "        ", "        " },
+	{ "       ┐", "       │", "        ", "        " },
+	{ "        ", "       │", "       ╵", "        " },
+	{ "        ", "       ╷", "       │", "        " },
+	{ "        ", "        ", "       │", "       ╵" },
+	{ "        ", "        ", "       ╷", "       ┘" },
+	{ "        ", "        ", "        ", "      ─┘" },
+	{ "        ", "        ", "        ", "     ──┘" },
+	{ "        ", "        ", "        ", "    ─── " },
+	{ "        ", "        ", "        ", "   ───  " },
+	{ "        ", "        ", "        ", "  ───   " },
+	{ "        ", "        ", "        ", " ───    " },
+	{ "        ", "        ", "        ", "└──     " },
+	{ "        ", "        ", "        ", "╷       " },
+	{ "        ", "        ", "│       ", "└       " },
+	{ "        ", "╷       ", "│       ", "        " },
+	{ "        ", "│       ", "╵       ", "        " },
+	{ "╷       ", "│       ", "        ", "        " },
+	{ "┌       ", "╵       ", "        ", "        " }
+};
 
 void init_colors(void)
 {
@@ -43,8 +69,7 @@ void draw_spinner(int y, int x)
 {
 	int frame = ui_render_cycle % 25;
 	attron(COLOR_PAIR(CP_ACCENT) | A_BOLD);
-	for (int i = 0; i < 4; i++)
-	{
+	for (int i = 0; i < 4; i++) {
 		mvprintw(y + i, x, "%s", spinner_frames[frame][i]);
 	}
 	attroff(COLOR_PAIR(CP_ACCENT) | A_BOLD);
@@ -53,18 +78,13 @@ void draw_spinner(int y, int x)
 void draw_background(void)
 {
 	attron(COLOR_PAIR(CP_DIM) | A_BOLD);
-	for (int y = 0; y < rows; y += 2)
-	{
-		for (int x = 0; x < cols; x += 4)
-		{
-			if ((x + y + ui_render_cycle) % 10 == 0)
-			{
+	for (int y = 0; y < rows; y += 2) {
+		for (int x = 0; x < cols; x += 4) {
+			if ((x + y + ui_render_cycle) % 10 == 0) {
 				attron(A_REVERSE);
 				mvaddstr(y, x, "+");
 				attroff(A_REVERSE);
-			}
-			else
-			{
+			} else {
 				mvaddstr(y, x, "+");
 			}
 		}
@@ -86,8 +106,7 @@ void draw_background(void)
 	mvhline(rows - 1, 0, ACS_HLINE, cols);
 
 	int wave = ui_render_cycle % 3;
-	const char *dots = (wave == 0) ? ".  " : (wave == 1) ? " . "
-							     : "  .";
+	const char *dots = (wave == 0) ? ".  " : (wave == 1) ? " . " : "  .";
 	mvprintw(rows - 1, 2, " CPU: 1%% %s MEM: 124MB %s NET: IDLE ", dots, dots);
 	attroff(COLOR_PAIR(CP_FRAME) | A_DIM);
 }
@@ -106,8 +125,7 @@ void draw_btop_box(int y, int x, int h, int w, const char *title)
 	mvvline(y + 1, x + w - 1, ACS_VLINE, h - 2);
 	attroff(COLOR_PAIR(CP_FRAME));
 
-	if (title)
-	{
+	if (title) {
 		attron(COLOR_PAIR(CP_ACCENT) | A_BOLD);
 		mvprintw(y, x + 2, " %s ", title);
 		attroff(COLOR_PAIR(CP_ACCENT) | A_BOLD);
@@ -124,16 +142,12 @@ void draw_meter(int y, int x, int w, int percent)
 	mvaddch(y, x + w - 1, ']');
 	attroff(COLOR_PAIR(CP_FRAME) | A_DIM);
 
-	for (int i = 0; i < bar_width; i++)
-	{
-		if (i < fill)
-		{
+	for (int i = 0; i < bar_width; i++) {
+		if (i < fill) {
 			attron(COLOR_PAIR(CP_METER_ON) | A_BOLD);
 			mvaddstr(y, x + 1 + i, "/");
 			attroff(COLOR_PAIR(CP_METER_ON) | A_BOLD);
-		}
-		else
-		{
+		} else {
 			attron(COLOR_PAIR(CP_METER_OFF) | A_BOLD);
 			mvaddstr(y, x + 1 + i, "-");
 			attroff(COLOR_PAIR(CP_METER_OFF) | A_BOLD);
@@ -146,16 +160,14 @@ void draw_button_btop(int y, int x, int w, const char *text, bool active)
 	bool hover = (event.y >= y && event.y < y + 3 && event.x >= x && event.x < x + w);
 	int color = active ? CP_INVERT : CP_FRAME;
 
-	if (hover)
-		color = CP_INVERT;
+	if (hover) color = CP_INVERT;
 
 	attron(COLOR_PAIR(color));
 	mvhline(y, x, ' ', w);
 	mvhline(y + 1, x, ' ', w);
 	mvhline(y + 2, x, ' ', w);
 
-	if (!hover && !active)
-	{
+	if (!hover && !active) {
 		attroff(COLOR_PAIR(color));
 		attron(COLOR_PAIR(CP_FRAME));
 		mvaddch(y, x, ACS_ULCORNER);
@@ -168,9 +180,7 @@ void draw_button_btop(int y, int x, int w, const char *text, bool active)
 		mvvline(y + 1, x + w - 1, ACS_VLINE, 1);
 		attroff(COLOR_PAIR(CP_FRAME));
 		attron(COLOR_PAIR(CP_DEFAULT) | A_BOLD);
-	}
-	else
-	{
+	} else {
 		attron(A_BOLD);
 	}
 
@@ -182,8 +192,7 @@ void draw_button_btop(int y, int x, int w, const char *text, bool active)
 
 void draw_server_table(void)
 {
-	if (scan_in_progress)
-		return;
+	if (scan_in_progress) return;
 
 	int start_y = target_row_start + 2;
 
@@ -195,31 +204,24 @@ void draw_server_table(void)
 
 	mvhline(start_y + 1, target_cols_start + 1, ACS_HLINE, target_cols_end - target_cols_start - 2);
 
-	for (int i = 0; i < server_count; i++)
-	{
+	for (int i = 0; i < server_count; i++) {
 		int row_y = start_y + 2 + i;
-		if (row_y >= target_row_end - 1)
-			break;
+		if (row_y >= target_row_end - 1) break;
 
 		bool hover = (event.y == row_y && event.x > target_cols_start && event.x < target_cols_end);
 
-		if (hover)
-		{
+		if (hover) {
 			attron(COLOR_PAIR(CP_INVERT));
 			mvhline(row_y, target_cols_start + 1, ' ', target_cols_end - target_cols_start - 2);
 			mvprintw(row_y, target_cols_start + 2, " > %04d   %-20s %-8d %-10s ",
 				 server_list[i].server_id, server_list[i].ip, server_list[i].port, "ONLINE");
 			attroff(COLOR_PAIR(CP_INVERT));
-		}
-		else
-		{
+		} else {
 			attron(COLOR_PAIR(CP_DEFAULT));
-			if (i % 2 != 0)
-				attron(A_DIM);
+			if (i % 2 != 0) attron(A_DIM);
 			mvprintw(row_y, target_cols_start + 2, "   %04d   %-20s %-8d %-10s ",
 				 server_list[i].server_id, server_list[i].ip, server_list[i].port, "ONLINE");
-			if (i % 2 != 0)
-				attroff(A_DIM);
+			if (i % 2 != 0) attroff(A_DIM);
 			attroff(COLOR_PAIR(CP_DEFAULT));
 		}
 	}
@@ -235,8 +237,9 @@ void popup_input_btop(void)
 	safe_popup_dimensions(&w, &h, &x, &y);
 	attron(COLOR_PAIR(CP_DEFAULT));
 
-	for (int i = 0; i < h; i++)
+	for (int i = 0; i < h; i++) {
 		mvhline(y + i, x, ' ', w);
+	}
 
 	draw_btop_box(y, x, h, w, "SECURE TRANSMISSION");
 	mvprintw(y + 2, x + 2, "ENTER PAYLOAD:");
@@ -253,16 +256,14 @@ void popup_input_btop(void)
 	timeout(-1);
 
 	int max_visible = w - 4 - 1;
-	if (max_visible < 0)
-		max_visible = 0;
+	if (max_visible < 0) max_visible = 0;
 
 	safe_getnstr(buf, sizeof(buf), max_visible);
 	timeout(10);
 	noecho();
 	curs_set(0);
 
-	if (strlen(buf) > 0)
-	{
+	if (strlen(buf) > 0) {
 		attron(COLOR_PAIR(CP_INVERT) | A_BLINK);
 		mvprintw(y + 6, x + w / 2 - 5, " SENDING ");
 
@@ -278,13 +279,11 @@ void popup_input_btop(void)
 
 int safe_getnstr(char *buf, size_t buf_size, int max_chars)
 {
-	if (buf == NULL)
-		return -2;
+	if (buf == NULL) return -2;
 
 	int limit = (max_chars < (int)buf_size - 1) ? max_chars : (int)buf_size - 1;
 
-	if (limit <= 0)
-		return -1;
+	if (limit <= 0) return -1;
 	getnstr(buf, limit);
 
 	buf[buf_size - 1] = '\0';
@@ -296,23 +295,17 @@ void safe_popup_dimensions(int *w, int *h, int *x, int *y)
 	*w = (*w < 30) ? 30 : *w;
 	*h = (*h < 6) ? 6 : *h;
 
-	if (*w > cols - 4)
-		*w = cols - 4;
-	if (*h > rows - 4)
-		*h = rows - 4;
+	if (*w > cols - 4) *w = cols - 4;
+	if (*h > rows - 4) *h = rows - 4;
 
 	*y = (rows - *h) / 2;
 	*x = (cols - *w) / 2;
 
-	if (*y < 0)
-		*y = 0;
-	if (*x < 0)
-		*x = 0;
+	if (*y < 0) *y = 0;
+	if (*x < 0) *x = 0;
 
-	if (*y + *h > rows)
-		*y = rows - *h;
-	if (*x + *w > cols)
-		*x = cols - *w;
+	if (*y + *h > rows) *y = rows - *h;
+	if (*x + *w > cols) *x = cols - *w;
 }
 
 void on_upload_progress(size_t sent, size_t total, double speed_mbps)
@@ -324,8 +317,9 @@ void on_upload_progress(size_t sent, size_t total, double speed_mbps)
 	int pct = (int)((sent * 100) / total);
 
 	attron(COLOR_PAIR(CP_DEFAULT));
-	for (int i = 0; i < h; i++)
+	for (int i = 0; i < h; i++) {
 		mvhline(y + i, x, ' ', w);
+	}
 	draw_btop_box(y, x, h, w, "UPLOADING FILE");
 
 	mvprintw(y + 2, x + 2, "Transferred: %zu / %zu bytes", sent, total);
@@ -356,8 +350,9 @@ void popup_file_upload(void)
 	safe_popup_dimensions(&w, &h, &x, &y);
 	attron(COLOR_PAIR(CP_DEFAULT));
 
-	for (int i = 0; i < h; i++)
+	for (int i = 0; i < h; i++) {
 		mvhline(y + i, x, ' ', w);
+	}
 
 	draw_btop_box(y, x, h, w, "FILE UPLOAD");
 	mvprintw(y + 2, x + 2, "FILE PATH (relative to %s):", UPLOAD_BASE_DIR);
@@ -378,15 +373,14 @@ void popup_file_upload(void)
 	noecho();
 	curs_set(0);
 
-	if (strlen(input_buf) > 0)
-	{
-		if (!is_path_safe(input_buf, UPLOAD_BASE_DIR))
-		{
+	if (strlen(input_buf) > 0) {
+		if (!is_path_safe(input_buf, UPLOAD_BASE_DIR)) {
 			attron(COLOR_PAIR(CP_DEFAULT));
 
-			for (int i = 0; i < h; i++)
+			for (int i = 0; i < h; i++) {
 				mvhline(y + i, x, ' ', w);
-				
+			}
+
 			draw_btop_box(y, x, h, w, "SECURITY ERROR");
 			attron(COLOR_PAIR(CP_WARN) | A_BOLD);
 
@@ -400,12 +394,12 @@ void popup_file_upload(void)
 			return;
 		}
 
-		if (!resolve_safe_path(input_buf, safe_path, sizeof(safe_path), UPLOAD_BASE_DIR))
-		{
+		if (!resolve_safe_path(input_buf, safe_path, sizeof(safe_path), UPLOAD_BASE_DIR)) {
 			attron(COLOR_PAIR(CP_DEFAULT));
 
-			for (int i = 0; i < h; i++)
+			for (int i = 0; i < h; i++) {
 				mvhline(y + i, x, ' ', w);
+			}
 
 			draw_btop_box(y, x, h, w, "ERROR");
 			attron(COLOR_PAIR(CP_WARN) | A_BOLD);
@@ -421,12 +415,12 @@ void popup_file_upload(void)
 
 		struct stat st;
 
-		if (stat(safe_path, &st) != 0 || !S_ISREG(st.st_mode))
-		{
+		if (stat(safe_path, &st) != 0 || !S_ISREG(st.st_mode)) {
 			attron(COLOR_PAIR(CP_DEFAULT));
 
-			for (int i = 0; i < h; i++)
+			for (int i = 0; i < h; i++) {
 				mvhline(y + i, x, ' ', w);
+			}
 
 			draw_btop_box(y, x, h, w, "ERROR");
 			attron(COLOR_PAIR(CP_WARN) | A_BOLD);
@@ -446,19 +440,17 @@ void popup_file_upload(void)
 
 		attron(COLOR_PAIR(CP_DEFAULT));
 
-		for (int i = 0; i < h; i++)
+		for (int i = 0; i < h; i++) {
 			mvhline(y + i, x, ' ', w);
+		}
 
 		draw_btop_box(y, x, h, w, "STATUS");
 
-		if (res == 0)
-		{
+		if (res == 0) {
 			attron(COLOR_PAIR(CP_INVERT));
 			mvprintw(y + 3, x + w / 2 - 8, " UPLOAD COMPLETE ");
 			attroff(COLOR_PAIR(CP_INVERT));
-		}
-		else
-		{
+		} else {
 			attron(COLOR_PAIR(CP_WARN) | A_BOLD);
 			mvprintw(y + 3, x + w / 2 - 6, " UPLOAD FAILED ");
 			attroff(COLOR_PAIR(CP_WARN) | A_BOLD);
@@ -475,15 +467,13 @@ void handle_input_btop(pthread_t *thread_ptr)
 {
 	int box_w = target_cols_end - target_cols_start;
 
-	if (!connected_to_server && !scan_in_progress)
-	{
+	if (!connected_to_server && !scan_in_progress) {
 		int btn_w = 16;
 		int btn_x = target_cols_start + box_w - btn_w - 2;
 		int btn_y = target_row_start;
 
 		if (last_click_y >= btn_y && last_click_y <= btn_y + 2 &&
-		    last_click_x >= btn_x && last_click_x <= btn_x + btn_w)
-		{
+		    last_click_x >= btn_x && last_click_x <= btn_x + btn_w) {
 
 			scan_in_progress = true;
 			scan_render_cycle = 0;
@@ -497,12 +487,10 @@ void handle_input_btop(pthread_t *thread_ptr)
 		int clicked_index = -1;
 
 		pthread_mutex_lock(&list_mutex);
-		for (int i = 0; i < server_count; i++)
-		{
+		for (int i = 0; i < server_count; i++) {
 			if (last_click_y == list_start_y + i &&
 			    last_click_x > target_cols_start &&
-			    last_click_x < target_cols_end)
-			{
+			    last_click_x < target_cols_end) {
 				current_server = server_list[i];
 				clicked_index = i;
 				break;
@@ -510,14 +498,14 @@ void handle_input_btop(pthread_t *thread_ptr)
 		}
 		pthread_mutex_unlock(&list_mutex);
 
-		if (clicked_index != -1)
-		{
+		if (clicked_index != -1) {
 			int w = 34, h = 8;
 			int cy = rows / 2 - h / 2, cx = cols / 2 - w / 2;
 
 			attron(COLOR_PAIR(CP_DEFAULT));
-			for (int k = 0; k < h; k++)
+			for (int k = 0; k < h; k++) {
 				mvhline(cy + k, cx, ' ', w);
+			}
 			draw_btop_box(cy, cx, h, w, "HANDSHAKE");
 
 			draw_spinner(cy + 2, cx + w / 2 - 4);
@@ -530,12 +518,9 @@ void handle_input_btop(pthread_t *thread_ptr)
 
 			usleep(500000);
 
-			if (core_connect(current_server.ip, current_server.port) == 0)
-			{
+			if (core_connect(current_server.ip, current_server.port) == 0) {
 				connected_to_server = true;
-			}
-			else
-			{
+			} else {
 				attron(COLOR_PAIR(CP_WARN) | A_BOLD);
 				mvprintw(cy + 6, cx + 2, " CONNECTION REFUSED   ");
 				attroff(COLOR_PAIR(CP_WARN) | A_BOLD);
@@ -546,8 +531,7 @@ void handle_input_btop(pthread_t *thread_ptr)
 		return;
 	}
 
-	if (connected_to_server)
-	{
+	if (connected_to_server) {
 		int btn_w = 20;
 		int btn_start_x = target_cols_start + 4;
 		int btn_msg_y = target_row_start + 8;
@@ -555,20 +539,17 @@ void handle_input_btop(pthread_t *thread_ptr)
 		int btn_disc_y = target_row_start + 16;
 
 		if (last_click_y >= btn_msg_y && last_click_y < btn_msg_y + 3 &&
-		    last_click_x >= btn_start_x && last_click_x < btn_start_x + btn_w)
-		{
+		    last_click_x >= btn_start_x && last_click_x < btn_start_x + btn_w) {
 			popup_input_btop();
 		}
 
 		if (last_click_y >= btn_file_y && last_click_y < btn_file_y + 3 &&
-		    last_click_x >= btn_start_x && last_click_x < btn_start_x + btn_w)
-		{
+		    last_click_x >= btn_start_x && last_click_x < btn_start_x + btn_w) {
 			popup_file_upload();
 		}
 
 		if (last_click_y >= btn_disc_y && last_click_y < btn_disc_y + 3 &&
-		    last_click_x >= btn_start_x && last_click_x < btn_start_x + btn_w)
-		{
+		    last_click_x >= btn_start_x && last_click_x < btn_start_x + btn_w) {
 			connected_to_server = false;
 		}
 	}
