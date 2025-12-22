@@ -59,7 +59,7 @@ static void normalize_path(char *path)
         }
 }
 
-bool is_path_safe(const char *path, const char *allowed_base)
+bool is_path_safe(const char* path, const char* allowed_base)
 {
         if (!path || path[0] == '\0')
                 return false;
@@ -115,4 +115,58 @@ bool is_path_safe(const char *path, const char *allowed_base)
         }
 
         return true;
+}
+
+char *resolve_safe_path(const char* input_path, char* resolved_buffer, size_t buffer_size, const char* allowed_base)
+{
+        if (!input_path || !resolved_buffer || buffer_size < MAX_PATH_LEN)
+                return NULL;
+
+        if (!is_path_safe(input_path, allowed_base))
+                return NULL;
+
+        char path_copy[MAX_PATH_LEN];
+        strncpy(path_copy, input_path, sizeof(path_copy) - 1);
+
+        path_copy[sizeof(path_copy) - 1] = '\0';
+        normalize_path(path_copy);
+
+        if (allowed_base && allowed_base[0] != '\0')
+        {
+                char base_copy[MAX_PATH_LEN];
+                strncpy(base_copy, allowed_base, sizeof(base_copy) - 1);
+                base_copy[sizeof(base_copy) - 1] = '\0';
+
+                normalize_path(base_copy);
+                snprintf(resolved_buffer, buffer_size, "%s/%s", base_copy, path_copy);
+        }
+        else
+        {
+                strncpy(resolved_buffer, path_copy, buffer_size - 1);
+                resolved_buffer[buffer_size - 1] = '\0';
+        }
+
+        char* real = realpath(resolved_buffer, NULL);
+
+        if (real)
+        {
+                if (allowed_base && allowed_base[0] != '\0')
+                {
+                        char real_base[MAX_PATH_LEN];
+                        snprintf(real_base, sizeof(real_base), "%s/", allowed_base);
+                        normalize_path(real_base);
+
+                        if (strncmp(real, real_base, strlen(real_base)) != 0)
+                        {
+                                free(real);
+                                return NULL;
+                        }
+                }
+
+                strncpy(resolved_buffer, real, buffer_size - 1);
+                resolved_buffer[buffer_size - 1] = '\0';
+                free(real);
+        }
+
+        return resolved_buffer;
 }
