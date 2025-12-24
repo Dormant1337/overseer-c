@@ -48,3 +48,47 @@ void core_start_scan(pthread_t *thread)
 	if (*thread) pthread_join(*thread, NULL);
 	pthread_create(thread, NULL, beacon_listener, NULL);
 }
+
+int core_send_message_atomic(const char *ip, int port, safe_buffer_t *buf)
+{
+	if (!ip || !buf) return -1;
+	char *payload_copy = NULL;
+	size_t payload_len = 0;
+
+	char ip_copy[16] = {0};
+	int port_copy = port;
+	pthread_mutex_lock(&buf->lock);
+
+	if (!buf->data || buf->length == 0 || buf->length > 1024)
+	{
+		pthread_mutex_unlock(&buf->lock);
+		return -1;
+	}
+
+	payload_copy = malloc(buf->length + 1);
+
+	if (!payload_copy)
+	{
+		pthread_mutex_unlock(&buf->lock);
+		return -1;
+	}
+
+	memcpy(payload_copy, buf->data, buf->length);
+	payload_copy[buf->length] = '\0';
+
+	payload_len = buf->length;
+	pthread_mutex_unlock(&buf->lock);
+
+	if (port_copy <= 0 || port_copy > 65535)
+	{
+		free(payload_copy);
+		return -1;
+	}
+
+	strncpy(ip_copy, ip, sizeof(ip_copy) - 1);
+	ip_copy[sizeof(ip_copy) - 1] = '\0';
+
+	send_message(ip_copy, port_copy, payload_copy);
+	free(payload_copy);
+	return 0;
+}
