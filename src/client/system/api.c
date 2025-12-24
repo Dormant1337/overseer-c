@@ -49,10 +49,10 @@ void core_start_scan(pthread_t *thread)
 	pthread_create(thread, NULL, beacon_listener, NULL);
 }
 
-int core_send_message_atomic(const char *ip, int port, safe_buffer_t *buf)
+int core_send_message_atomic(const char* ip, int port, safe_buffer_t* buf)
 {
 	if (!ip || !buf) return -1;
-	char *payload_copy = NULL;
+	char* payload_copy = NULL;
 	size_t payload_len = 0;
 
 	char ip_copy[16] = {0};
@@ -91,4 +91,62 @@ int core_send_message_atomic(const char *ip, int port, safe_buffer_t *buf)
 	send_message(ip_copy, port_copy, payload_copy);
 	free(payload_copy);
 	return 0;
+}
+
+int core_upload_file_atomic(const char* ip, int port, safe_buffer_t* path_buf, progress_cb_t cb)
+{
+	if (!ip || !path_buf) return -1;
+	char* path_copy = NULL;
+
+	char ip_copy[16] = {0};
+	int port_copy = port;
+	pthread_mutex_lock(&path_buf->lock);
+
+	if (!path_buf->data || path_buf->length == 0 || path_buf->length > PATH_MAX)
+	{
+		pthread_mutex_unlock(&path_buf->lock);
+		return -1;
+	}
+
+	path_copy = strndup(path_buf->data, path_buf->length);
+
+	if (!path_copy)
+	{
+		pthread_mutex_unlock(&path_buf->lock);
+		return -1;
+	}
+
+	pthread_mutex_unlock(&path_buf->lock);
+
+	if (port_copy <= 0 || port_copy > 65535)
+	{
+		free(path_copy);
+		return -1;
+	}
+
+	strncpy(ip_copy, ip, sizeof(ip_copy) - 1);
+	ip_copy[sizeof(ip_copy) - 1] = '\0';
+	struct stat st;
+
+	if (stat(path_copy, &st) != 0)
+	{
+		free(path_copy);
+		return -1;
+	}
+
+	if (!S_ISREG(st.st_mode))
+	{
+		free(path_copy);
+		return -1;
+	}
+
+	if (st.st_size == 0)
+	{
+		free(path_copy);
+		return -1;
+	}
+
+	int result = send_file_to_server(ip_copy, port_copy, path_copy, cb);
+	free(path_copy);
+	return result;
 }

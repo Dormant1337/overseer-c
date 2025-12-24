@@ -17,5 +17,6 @@ int core_send_message(const char *ip, int port, const char *payload);
 int core_upload_file(const char *ip, int port, const char *path, progress_cb_t cb);
 void core_start_scan(pthread_t *thread);
 
-int core_send_message_atomic(const char *ip, int port, safe_buffer_t *buf);
+int core_send_message_atomic(const char* ip, int port, safe_buffer_t* buf);
+int core_upload_file_atomic(const char* ip, int port, safe_buffer_t* path_buf, progress_cb_t cb);
 #endif
