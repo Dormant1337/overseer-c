@@ -569,3 +569,113 @@ void handle_input_btop(pthread_t *thread_ptr)
 		}
 	}
 }
+
+int send_message_safely(const char* message)
+{
+	if (!connected_to_server) return -1;
+	safe_buffer_t safe_buf;
+
+	if (core_init_safe_buffer(&safe_buf, 1024) != 0)
+		return -1;
+
+	if (core_set_safe_buffer(&safe_buf, message, strlen(message)) != 0)
+	{
+		core_destroy_safe_buffer(&safe_buf);
+		return -1;
+	}
+
+	bool is_valid;
+
+	if (core_validate_server_state(current_server.ip, current_server.port, &is_valid) != 0 || !is_valid)
+	{
+		core_destroy_safe_buffer(&safe_buf);
+		return -1;
+	}
+
+	int result = core_send_message_atomic(current_server.ip, current_server.port, &safe_buf);
+	core_destroy_safe_buffer(&safe_buf);
+	return result;
+}
+
+int upload_file_safely(const char* filepath)
+{
+	if (!connected_to_server) return -1;
+	safe_buffer_t path_buf;
+
+	if (core_init_safe_buffer(&path_buf, PATH_MAX) != 0)
+		return -1;
+
+	if (core_set_safe_buffer(&path_buf, filepath, strlen(filepath)) != 0)
+	{
+		core_destroy_safe_buffer(&path_buf);
+		return -1;
+	}
+
+	bool is_valid;
+
+	if (core_validate_server_state(current_server.ip, current_server.port, &is_valid) != 0 || !is_valid)
+	{
+		core_destroy_safe_buffer(&path_buf);
+		return -1;
+	}
+
+	int result = core_upload_file_atomic(current_server.ip, current_server.port, &path_buf,
+					     [](size_t sent, size_t total, double speed)
+					     {
+						     mvprintw(target_row_start + 10, target_cols_start + 3,
+							      "Uploading: %zu/%zu bytes (%.2f MB/s)", sent, total, speed);
+						     refresh();
+					     });
+
+	core_destroy_safe_buffer(&path_buf);
+	return result;
+}
+
+int execute_operation_atomic(const char* operation_type, const char* data)
+{
+	safe_buffer_t input_buf;
+	if (core_init_safe_buffer(&input_buf, 1024) != 0)
+		return -1;
+
+	if (core_set_safe_buffer(&input_buf, data, strlen(data)) != 0)
+	{
+		core_destroy_safe_buffer(&input_buf);
+		return -1;
+	}
+
+	bool server_valid = false;
+	int validation_result = core_validate_server_state(
+	    current_server.ip,
+	    current_server.port,
+	    &server_valid);
+
+	if (validation_result != 0 || !server_valid || 
+	    !connected_to_server ||
+	    strlen(data) == 0)
+	{
+
+		core_destroy_safe_buffer(&input_buf);
+		return -1;
+	}
+
+	int operation_result = -1;
+
+	if (strcmp(operation_type, "message") == 0)
+	{
+		operation_result = core_send_message_atomic(
+		    current_server.ip,
+		    current_server.port,
+		    &input_buf);
+	}
+	else if (strcmp(operation_type, "file") == 0)
+	{
+		operation_result = core_upload_file_atomic(
+		    current_server.ip,
+		    current_server.port,
+		    &input_buf,
+		    NULL);
+	}
+
+	core_destroy_safe_buffer(&input_buf);
+	return operation_result;
+}

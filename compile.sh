@@ -16,6 +16,7 @@ echo "Compiling Client..."
 gcc src/client/main.c \
 	src/client/system/network.c \
 	src/client/system/api.c \
+	src/client/system/atomic.c\
 	src/client/tui/interface.c \
 	src/client/tui/path_security.c \
 	-o client \
