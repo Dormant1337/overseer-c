@@ -32,6 +32,50 @@ void send_message(const char *ip, int port, const char *msg)
 	close(sock);
 }
 
+int send_command_with_response(const char *ip, int port, const char *cmd, char *out_buf, size_t buf_size)
+{
+	if (!out_buf || buf_size == 0) return -1;
+	memset(out_buf, 0, buf_size);
+
+	int sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (sock < 0) return -1;
+
+	struct sockaddr_in serv_addr;
+	memset(&serv_addr, 0, sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(port);
+	inet_pton(AF_INET, ip, &serv_addr.sin_addr);
+
+	struct timeval timeout = {3, 0};
+	setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+	if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+		close(sock);
+		return -1;
+	}
+
+	char protocol_msg[1024];
+	snprintf(protocol_msg, sizeof(protocol_msg), "EXEC %s", cmd);
+
+	if (send(sock, protocol_msg, strlen(protocol_msg), 0) < 0) {
+		close(sock);
+		return -1;
+	}
+
+	size_t total_read = 0;
+	ssize_t n;
+	while (total_read < buf_size - 1) {
+		n = recv(sock, out_buf + total_read, buf_size - 1 - total_read, 0);
+		if (n <= 0) break;
+		total_read += n;
+	}
+	out_buf[total_read] = '\0';
+
+	close(sock);
+	return 0;
+}
+
 int send_file_to_server(const char *ip, int port, const char *filepath, progress_cb_t callback)
 {
 	FILE *fp = fopen(filepath, "rb");

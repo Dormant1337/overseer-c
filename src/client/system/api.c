@@ -30,6 +30,13 @@ int core_send_message(const char *ip, int port, const char *payload)
 	return 0;
 }
 
+int core_execute_command(const char *ip, int port, const char *cmd, char *out_buf, size_t buf_size)
+{
+	if (!ip || !cmd || !out_buf)
+		return -1;
+	return send_command_with_response(ip, port, cmd, out_buf, buf_size);
+}
+
 int core_upload_file(const char *ip, int port, const char *path, progress_cb_t cb)
 {
 	if (!ip || !path)

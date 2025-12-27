@@ -121,7 +121,8 @@ int main(void)
 
 				draw_button_btop(target_row_start + 8, target_cols_start + 4, 20, "SEND PAYLOAD", true);
 				draw_button_btop(target_row_start + 12, target_cols_start + 4, 20, "SEND FILE", true);
-				draw_button_btop(target_row_start + 16, target_cols_start + 4, 20, "TERMINATE", false);
+				draw_button_btop(target_row_start + 16, target_cols_start + 4, 20, "EXECUTE CMD", true);
+				draw_button_btop(target_row_start + 20, target_cols_start + 4, 20, "TERMINATE", false);
 			}
 		}
 

