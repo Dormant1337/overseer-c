@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <stdatomic.h>
+#include <limits.h>
 #include "interface.h"
 #include "path_security.h"
 #include "../globals.h"
@@ -209,25 +210,21 @@ void draw_server_table(void)
 	mvhline(start_y + 1, target_cols_start + 1, ACS_HLINE, 
 		target_cols_end - target_cols_start - 2);
 
-	for (int i = 0; i < safe_server_count; i++)
-	{
+	for (int i = 0; i < safe_server_count; i++) {
 		int row_y = start_y + 2 + i;
 		if (row_y >= target_row_end - 1) break;
 
 		bool hover = (event.y == row_y && event.x > target_cols_start 
 			&& event.x < target_cols_end);
 
-		if (hover)
-		{
+		if (hover) {
 			attron(COLOR_PAIR(CP_INVERT));
 			mvhline(row_y, target_cols_start + 1, ' ', target_cols_end - target_cols_start - 2);
 			mvprintw(row_y, target_cols_start + 2, " > %04d   ", server_list[i].server_id);
 			printw("%-20s", server_list[i].ip);
 			printw(" %-8d %-10s ", server_list[i].port, "ONLINE");
 			attroff(COLOR_PAIR(CP_INVERT));
-		}
-		else
-		{
+		} else {
 			attron(COLOR_PAIR(CP_DEFAULT));
 			if (i % 2 != 0)
 				attron(A_DIM);
@@ -578,16 +575,14 @@ int send_message_safely(const char* message)
 	if (core_init_safe_buffer(&safe_buf, 1024) != 0)
 		return -1;
 
-	if (core_set_safe_buffer(&safe_buf, message, strlen(message)) != 0)
-	{
+	if (core_set_safe_buffer(&safe_buf, message, strlen(message)) != 0) {
 		core_destroy_safe_buffer(&safe_buf);
 		return -1;
 	}
 
 	bool is_valid;
 
-	if (core_validate_server_state(current_server.ip, current_server.port, &is_valid) != 0 || !is_valid)
-	{
+	if (core_validate_server_state(current_server.ip, current_server.port, &is_valid) != 0 || !is_valid) {
 		core_destroy_safe_buffer(&safe_buf);
 		return -1;
 	}
@@ -605,27 +600,20 @@ int upload_file_safely(const char* filepath)
 	if (core_init_safe_buffer(&path_buf, PATH_MAX) != 0)
 		return -1;
 
-	if (core_set_safe_buffer(&path_buf, filepath, strlen(filepath)) != 0)
-	{
+	if (core_set_safe_buffer(&path_buf, filepath, strlen(filepath)) != 0) {
 		core_destroy_safe_buffer(&path_buf);
 		return -1;
 	}
 
 	bool is_valid;
 
-	if (core_validate_server_state(current_server.ip, current_server.port, &is_valid) != 0 || !is_valid)
-	{
+	if (core_validate_server_state(current_server.ip, current_server.port, &is_valid) != 0 || !is_valid) {
 		core_destroy_safe_buffer(&path_buf);
 		return -1;
 	}
 
 	int result = core_upload_file_atomic(current_server.ip, current_server.port, &path_buf,
-					     [](size_t sent, size_t total, double speed)
-					     {
-						     mvprintw(target_row_start + 10, target_cols_start + 3,
-							      "Uploading: %zu/%zu bytes (%.2f MB/s)", sent, total, speed);
-						     refresh();
-					     });
+					     on_upload_progress);
 
 	core_destroy_safe_buffer(&path_buf);
 	return result;
@@ -637,8 +625,7 @@ int execute_operation_atomic(const char* operation_type, const char* data)
 	if (core_init_safe_buffer(&input_buf, 1024) != 0)
 		return -1;
 
-	if (core_set_safe_buffer(&input_buf, data, strlen(data)) != 0)
-	{
+	if (core_set_safe_buffer(&input_buf, data, strlen(data)) != 0) {
 		core_destroy_safe_buffer(&input_buf);
 		return -1;
 	}
@@ -651,8 +638,7 @@ int execute_operation_atomic(const char* operation_type, const char* data)
 
 	if (validation_result != 0 || !server_valid || 
 	    !connected_to_server ||
-	    strlen(data) == 0)
-	{
+	    strlen(data) == 0) {
 
 		core_destroy_safe_buffer(&input_buf);
 		return -1;
@@ -660,15 +646,12 @@ int execute_operation_atomic(const char* operation_type, const char* data)
 
 	int operation_result = -1;
 
-	if (strcmp(operation_type, "message") == 0)
-	{
+	if (strcmp(operation_type, "message") == 0) {
 		operation_result = core_send_message_atomic(
 		    current_server.ip,
 		    current_server.port,
 		    &input_buf);
-	}
-	else if (strcmp(operation_type, "file") == 0)
-	{
+	} else if (strcmp(operation_type, "file") == 0) {
 		operation_result = core_upload_file_atomic(
 		    current_server.ip,
 		    current_server.port,
