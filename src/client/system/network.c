@@ -12,6 +12,22 @@
 #include "network.h"
 #include "../globals.h"
 
+static int perform_auth(int sock, const char *password)
+{
+	if (!password) return -1;
+	char auth_msg[256];
+	snprintf(auth_msg, sizeof(auth_msg), "AUTH %s", password);
+	
+	if (send(sock, auth_msg, strlen(auth_msg), 0) < 0) return -1;
+	
+	char buf[16] = {0};
+	ssize_t n = recv(sock, buf, sizeof(buf) - 1, 0);
+	if (n <= 0) return -1;
+	
+	buf[n] = '\0';
+	return (strcmp(buf, "OK") == 0) ? 0 : -1;
+}
+
 void send_message(const char *ip, int port, const char *msg)
 {
 	int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -25,9 +41,12 @@ void send_message(const char *ip, int port, const char *msg)
 
 	struct timeval timeout = {1, 0};
 	setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
 	if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == 0) {
-		send(sock, msg, strlen(msg), 0);
+		if (perform_auth(sock, connection_password) == 0) {
+			send(sock, msg, strlen(msg), 0);
+		}
 	}
 	close(sock);
 }
@@ -51,6 +70,11 @@ int send_command_with_response(const char *ip, int port, const char *cmd, char *
 	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
 	if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+		close(sock);
+		return -1;
+	}
+
+	if (perform_auth(sock, connection_password) != 0) {
 		close(sock);
 		return -1;
 	}
@@ -96,6 +120,11 @@ int get_server_stats(const char *ip, int port, float *cpu, size_t *mem_used, siz
 		return -1;
 	}
 
+	if (perform_auth(sock, connection_password) != 0) {
+		close(sock);
+		return -1;
+	}
+
 	if (send(sock, "STATS", 5, 0) < 0) {
 		close(sock);
 		return -1;
@@ -136,6 +165,12 @@ int send_file_to_server(const char *ip, int port, const char *filepath, progress
 	inet_pton(AF_INET, ip, &serv_addr.sin_addr);
 
 	if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+		close(sock);
+		fclose(fp);
+		return -1;
+	}
+
+	if (perform_auth(sock, connection_password) != 0) {
 		close(sock);
 		fclose(fp);
 		return -1;
@@ -186,7 +221,7 @@ int send_file_to_server(const char *ip, int port, const char *filepath, progress
 	return 0;
 }
 
-int connect_handshake(const char *ip, int port)
+int connect_handshake(const char *ip, int port, const char *password)
 {
 	int sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) return -1;
@@ -199,20 +234,20 @@ int connect_handshake(const char *ip, int port)
 
 	struct timeval timeout = {2, 0};
 	setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
 	if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
 		close(sock);
 		return -1;
 	}
 
-	send(sock, "HANDSHAKE", 9, 0);
-
-	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-	char recv_buf[16];
-	ssize_t n = recv(sock, recv_buf, 15, 0);
+	if (perform_auth(sock, password) != 0) {
+		close(sock);
+		return -1;
+	}
+	
 	close(sock);
-
-	return (n >= 0) ? 0 : -1;
+	return 0;
 }
 
 void *beacon_listener(void *arg)

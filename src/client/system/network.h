@@ -9,7 +9,7 @@ void send_message(const char *ip, int port, const char *msg);
 int send_command_with_response(const char *ip, int port, const char *cmd, char *out_buf, size_t buf_size);
 int get_server_stats(const char *ip, int port, float *cpu, size_t *mem_used, size_t *mem_total);
 int send_file_to_server(const char *ip, int port, const char *filepath, progress_cb_t callback);
-int connect_handshake(const char *ip, int port);
+int connect_handshake(const char *ip, int port, const char *password);
 void *beacon_listener(void *arg);
 
 #endif

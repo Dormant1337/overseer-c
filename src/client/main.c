@@ -25,6 +25,7 @@ struct timeval scan_last_time;
 struct timeval ui_last_time;
 struct timeval stats_last_time;
 atomic_bool beacon_thread_active = false;
+char connection_password[64] = {0};
 
 int rows, cols;
 int target_row_start, target_row_end;

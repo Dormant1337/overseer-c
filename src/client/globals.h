@@ -32,6 +32,7 @@ extern int scan_render_cycle;
 extern int ui_render_cycle;
 extern struct timeval scan_last_time;
 extern atomic_bool beacon_thread_active;
+extern char connection_password[64];
 
 extern int rows, cols;
 extern int target_row_start, target_row_end;

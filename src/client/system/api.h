@@ -13,7 +13,7 @@ typedef struct {
 	pthread_mutex_t lock;
 } safe_buffer_t;
 
-int core_connect(const char *ip, int port);
+int core_connect(const char *ip, int port, const char *password);
 int core_send_message(const char *ip, int port, const char *payload);
 int core_execute_command(const char *ip, int port, const char *cmd, char *out_buf, size_t buf_size);
 int core_upload_file(const char *ip, int port, const char *path, progress_cb_t cb);

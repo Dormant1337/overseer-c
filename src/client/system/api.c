@@ -11,11 +11,16 @@
 #include "network.h"
 #include "../globals.h"
 
-int core_connect(const char *ip, int port)
+int core_connect(const char *ip, int port, const char *password)
 {
-	if (!ip || port <= 0 || port > 65535)
+	if (!ip || port <= 0 || port > 65535 || !password)
 		return -1;
-	return connect_handshake(ip, port);
+	
+	int res = connect_handshake(ip, port, password);
+	if (res == 0) {
+		strncpy(connection_password, password, sizeof(connection_password) - 1);
+	}
+	return res;
 }
 
 int core_send_message(const char *ip, int port, const char *payload)

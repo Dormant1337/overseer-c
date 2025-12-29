@@ -25,6 +25,7 @@
 
 int server_id = 0;
 int tcp_port = 8080;
+char *server_password = "admin";
 char beacon_msg[BEACON_MSG_SIZE];
 volatile bool running = true;
 int server_socket_fd = -1;
@@ -227,8 +228,36 @@ void handle_execution(int client_fd, const char *command_line)
 	log_msg(KGRN, "Execution complete");
 }
 
+bool authenticate_connection(int client_fd, struct sockaddr_in client_addr)
+{
+	char buf[256];
+	char *client_ip = inet_ntoa(client_addr.sin_addr);
+
+	ssize_t n = recv(client_fd, buf, sizeof(buf) - 1, 0);
+	if (n <= 0) return false;
+	
+	buf[n] = '\0';
+
+	if (strncmp(buf, "AUTH ", 5) == 0) {
+		char *pass = buf + 5;
+		if (strcmp(pass, server_password) == 0) {
+			send(client_fd, "OK", 2, 0);
+			return true;
+		}
+	}
+
+	log_msg(KRED, "Auth Failed from %s", client_ip);
+	send(client_fd, "ERR", 3, 0);
+	return false;
+}
+
 void handle_client(int client_fd, struct sockaddr_in client_addr)
 {
+	if (!authenticate_connection(client_fd, client_addr)) {
+		close(client_fd);
+		return;
+	}
+
 	char buf[1024];
 	char *client_ip = inet_ntoa(client_addr.sin_addr);
 
@@ -261,6 +290,9 @@ int main(int argc, char *argv[])
 	if (argc > 1) {
 		tcp_port = atoi(argv[1]);
 	}
+	if (argc > 2) {
+		server_password = argv[2];
+	}
 
 	log_msg(KWHT, "--- SYSTEM BOOT ---");
 	form_message();
@@ -278,6 +310,7 @@ int main(int argc, char *argv[])
 	}
 
 	log_msg(KGRN, "TCP Server Listening on port %d (ID: %d)", tcp_port, server_id);
+	log_msg(KBLU, "Password protected: %s", server_password);
 
 	while (running) {
 		struct sockaddr_in client_addr;
