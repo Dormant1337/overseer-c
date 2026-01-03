@@ -21,13 +21,24 @@ This repository currently represents the **architectural skeleton** of the final
 The project follows a strict separation of concerns between system logic and the frontend interface.
 
 ```text
-src/
-├── client/              # The Observer Node (TUI)
-│   ├── system/          # Low-level networking & logic (No GUI code allowed here)
-│   ├── tui/             # Ncurses rendering & input handling
-│   └── globals.h        # Shared state definitions
-└── server/              # The Beacon Node
-    └── main.c           # Standalone daemon logic
+─── src
+    ├── client
+    │   ├── globals.h            # Shared state definitions
+    │   ├── main.c               # Entry point & Event Loop
+    │   ├── system
+    │   │   ├── api.c            # Bridge between TUI and Network
+    │   │   ├── api.h
+    │   │   ├── atomic.c         # Thread-safe primitives
+    │   │   ├── atomic.h
+    │   │   ├── network.c        # Low-level socket operations
+    │   │   └── network.h
+    │   └── tui
+    │       ├── interface.c      # Ncurses rendering & input handling
+    │       ├── interface.h
+    │       ├── path_security.c  # Path traversal protection
+    │       └── path_security.h
+    └── server
+        └── main.c               # Standalone daemon logic
 ```
 
 ### Core Protocols
