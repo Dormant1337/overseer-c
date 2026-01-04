@@ -23,22 +23,32 @@ The project follows a strict separation of concerns between system logic and the
 ```text
 ─── src
     ├── client
-    │   ├── globals.h            # Shared state definitions
-    │   ├── main.c               # Entry point & Event Loop
-    │   ├── system
-    │   │   ├── api.c            # Bridge between TUI and Network
-    │   │   ├── api.h
-    │   │   ├── atomic.c         # Thread-safe primitives
-    │   │   ├── atomic.h
-    │   │   ├── network.c        # Low-level socket operations
-    │   │   └── network.h
-    │   └── tui
-    │       ├── interface.c      # Ncurses rendering & input handling
-    │       ├── interface.h
-    │       ├── path_security.c  # Path traversal protection
-    │       └── path_security.h
+    │   ├── globals.h
+    │   ├── main.c
+    │   ├── system
+    │   │   ├── api.c
+    │   │   ├── api.h
+    │   │   ├── atomic.c
+    │   │   ├── atomic.h
+    │   │   ├── network.c
+    │   │   └── network.h
+    │   └── tui
+    │       ├── components.c
+    │       ├── input.c
+    │       ├── interface.c
+    │       ├── interface.h
+    │       ├── path_security.c
+    │       ├── path_security.h
+    │       ├── popup_file.c
+    │       ├── popups.c
+    │       └── render.c
     └── server
-        └── main.c               # Standalone daemon logic
+        ├── client_handler.c
+        ├── main.c
+        ├── net.c
+        ├── server.h
+        ├── stats.c
+        └── utils.c
 ```
 
 ### Core Protocols
